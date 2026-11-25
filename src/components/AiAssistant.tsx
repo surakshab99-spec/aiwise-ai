@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { EnvironmentalData, ChatMessage } from '../types';
-import { Bot, Send, Sparkles, User, RefreshCw, HelpCircle, AlertCircle } from 'lucide-react';
+import { Bot, Send, Sparkles, User, RefreshCw, AlertCircle } from 'lucide-react';
+import { buildLocalAssistantReply } from '../utils/environmentalService';
 
 interface AiAssistantProps {
   data: EnvironmentalData;
@@ -44,33 +45,44 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ data }) => {
     setError(null);
 
     try {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: textToSend,
-          context: {
-            cityName: data.cityName,
-            aqi: data.aqi,
-            status: data.status,
-            pm25: data.pollutants.pm25,
-            pm10: data.pollutants.pm10,
-            temperature: data.temperature,
-            humidity: data.humidity,
-            windSpeed: data.windSpeed,
-          },
-        }),
-      });
+      let replyText = '';
+      try {
+        const response = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: AbortSignal.timeout(12000),
+          body: JSON.stringify({
+            message: textToSend,
+            context: {
+              cityName: data.cityName,
+              aqi: data.aqi,
+              status: data.status,
+              pm25: data.pollutants.pm25,
+              pm10: data.pollutants.pm10,
+              temperature: data.temperature,
+              humidity: data.humidity,
+              windSpeed: data.windSpeed,
+            },
+          }),
+        });
 
-      const result = await response.json();
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to get AI response');
+        const contentType = response.headers.get('content-type') || '';
+        if (response.ok && contentType.includes('application/json')) {
+          const result = await response.json();
+          replyText = result.reply;
+        }
+      } catch (networkErr) {
+        console.warn('Backend /api/chat unreachable, using contextual fallback:', networkErr);
+      }
+
+      if (!replyText) {
+        replyText = buildLocalAssistantReply(textToSend, data);
       }
 
       const assistantMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: result.reply,
+        content: replyText,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
 

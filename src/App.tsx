@@ -14,6 +14,8 @@ import { SettingsModal } from './components/SettingsModal';
 import { AuthModal } from './components/AuthModal';
 import { RefreshCw, AlertCircle } from 'lucide-react';
 
+import { fetchEnvironmentalTelemetry } from './utils/environmentalService';
+
 interface UserProfile {
   name: string;
   email: string;
@@ -43,17 +45,13 @@ export default function App() {
     setIsAuthModalOpen(true);
   };
 
-  // Fetch environmental data from backend API
+  // Fetch environmental data with backend-first + direct Open-Meteo fallback
   const fetchEnvironmentalData = async (lat = 28.6139, lon = 77.2090, cityName = 'New Delhi') => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/environmental-data?lat=${lat}&lon=${lon}&city=${encodeURIComponent(cityName)}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch environmental telemetry');
-      }
-      const json = await response.json();
-      setData(json);
+      const telemetry = await fetchEnvironmentalTelemetry(lat, lon, cityName);
+      setData(telemetry);
     } catch (err: any) {
       console.error(err);
       setError(err.message || 'Error connecting to environmental data services.');

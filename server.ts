@@ -14,9 +14,10 @@ async function startServer() {
   const app = express();
   app.use(express.json());
 
-  // Initialize Google GenAI SDK if API key exists
+  // Initialize Google GenAI SDK if a valid API key exists
   const apiKey = process.env.GEMINI_API_KEY;
-  const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
+  const hasValidKey = Boolean(apiKey && apiKey !== 'MY_GEMINI_API_KEY');
+  const ai = hasValidKey ? new GoogleGenAI({ apiKey }) : null;
 
   // API Routes
   app.get('/api/health', (req, res) => {
@@ -66,7 +67,6 @@ Guidelines:
         const lowerMsg = (message || '').toLowerCase();
         if (lowerMsg.includes('exercise') || lowerMsg.includes('workout') || lowerMsg.includes('run') || lowerMsg.includes('outdoor')) {
           if (aqi > 150) {
-            value:
             reply = `Given that the current AQI in **${cityName}** is **${aqi} (${status})** with PM2.5 at **${pm25} µg/m³**, it is **not advisable to exercise outdoors**. Strenuous outdoor physical activity causes you to inhale significantly more polluted air deep into your respiratory tract. Instead, consider indoor workouts, yoga, or using a home treadmill in an air-purified room.`;
           } else if (aqi > 100) {
             reply = `In **${cityName}** today, the AQI is **${aqi} (${status})**. Sensitive individuals, children, and older adults should avoid outdoor exertion. If you must exercise outdoors, keep it light, avoid peak traffic hours, and consider wearing an N95 respirator.`;
@@ -113,7 +113,8 @@ Guidelines:
       let weatherData: any = null;
       try {
         const weatherResp = await fetch(
-          `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_direction_10m&hourly=temperature_2m,relative_humidity_2m`
+          `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_direction_10m&hourly=temperature_2m,relative_humidity_2m`,
+          { signal: AbortSignal.timeout(5000) }
         );
         weatherData = await weatherResp.json();
       } catch (err) {
@@ -243,17 +244,18 @@ Guidelines:
     }
   });
 
-  // Vite middleware in development
-  if (process.env.NODE_ENV !== 'production' || true) {
+  // Vite middleware in development, static dist in production
+  if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
       server: { middlewareMode: true, hmr: false },
       appType: 'spa',
     });
     app.use(vite.middlewares);
   } else {
-    app.use(express.static(path.join(__dirname, 'dist')));
+    const distPath = path.join(__dirname, 'dist');
+    app.use(express.static(distPath));
     app.get('*', (req, res) => {
-      res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+      res.sendFile(path.join(distPath, 'index.html'));
     });
   }
 
